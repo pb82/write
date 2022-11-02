@@ -1,0 +1,5 @@
+---
+interval: 1m
+time_series:
+  - series: up{}
+    progression: "1+0x10"
