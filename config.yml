@@ -1,5 +1,7 @@
 ---
-interval: 1m
+interval: 10s
 time_series:
-  - series: up{}
-    progression: "1+0x10"
+  - series: kas_fleet_manager_kafka_requests_status_since_last_set{cluster_id="1jp6kdr7k0sjbe5adck2prjur8f39378",id="cdh36943c37idfspotqg",status="ready"}
+    realtime: "0+1"
+  - series: kas_fleet_manager_kafka_requests_status_since_last_set{cluster_id="1jp6kdr7k0sjbe5adck2prjur8f39378",id="cdh36943c37idfspotqg",status="suspending"}
+    realtime: "2+1"

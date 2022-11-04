@@ -109,7 +109,34 @@ func (p *ProgressionParser) progression() (*Progression, error) {
 	return &progression, nil
 }
 
-func (p *ProgressionParser) Parse(interval time.Duration) (*ProgressionList, error) {
+func (p *ProgressionParser) ParseRealtime() (ProgressionProvider, error) {
+	rt := Realtime{}
+	token, err := p.expect(TokenTypeValue)
+	if err != nil {
+		return nil, err
+	}
+	rt.Initial = token.FloatVal
+
+	incrementType, err := p.expect(TokenTypePlusMinus)
+	if err != nil {
+		return nil, err
+	}
+
+	incrementValue, err := p.expect(TokenTypeValue)
+	if err != nil {
+		return nil, err
+	}
+
+	if incrementType.StringVal == "+" {
+		rt.Increment = incrementValue.FloatVal
+	} else {
+		rt.Increment = -incrementValue.FloatVal
+	}
+
+	return &rt, nil
+}
+
+func (p *ProgressionParser) Parse(interval time.Duration) (ProgressionProvider, error) {
 	list := &ProgressionList{
 		interval:   interval,
 		iterations: 0,

@@ -2,6 +2,16 @@ package progression
 
 import "time"
 
+type ProgressionProvider interface {
+	Next() (bool, *float64, int64)
+}
+
+type Realtime struct {
+	timesAlready float64
+	Initial      float64
+	Increment    float64
+}
+
 type Progression struct {
 	NoData       bool
 	timesAlready float64
@@ -18,13 +28,10 @@ type ProgressionList struct {
 	progressions   []*Progression
 }
 
-func NewProgression(initial float64, increment float64, times float64) *Progression {
-	return &Progression{
-		timesAlready: 0,
-		Initial:      initial,
-		Increment:    increment,
-		Times:        times,
-	}
+func (p *Realtime) Next() (bool, *float64, int64) {
+	nextVal := p.Initial + (p.timesAlready * p.Increment)
+	p.timesAlready++
+	return true, &nextVal, time.Now().UnixMilli()
 }
 
 func (p *Progression) Next() (bool, *float64) {
