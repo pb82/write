@@ -1,15 +1,21 @@
 package progression
 
-import "time"
+import (
+	"github.com/Shopify/go-lua"
+	"time"
+)
 
 type ProgressionProvider interface {
 	Next() (bool, *float64, int64)
+	WithLuaState(state *lua.State)
 }
 
 type Realtime struct {
 	timesAlready float64
 	Initial      float64
 	Increment    float64
+	Fn           string
+	luaState     *lua.State
 }
 
 type Progression struct {
@@ -18,6 +24,7 @@ type Progression struct {
 	Initial      float64
 	Increment    float64
 	Times        float64
+	Fn           string
 }
 
 type ProgressionList struct {
@@ -26,15 +33,32 @@ type ProgressionList struct {
 	interval       time.Duration
 	startTimestamp int64
 	progressions   []*Progression
+	luaState       *lua.State
 }
 
 func (p *Realtime) Next() (bool, *float64, int64) {
-	nextVal := p.Initial + (p.timesAlready * p.Increment)
+	var nextVal float64
+	if p.Fn != "" && p.luaState != nil {
+		p.luaState.Global(p.Fn)
+		p.luaState.PushNumber(p.Initial)
+		p.luaState.PushNumber(p.timesAlready)
+		p.luaState.Call(2, 1)
+		lua.CheckNumber(p.luaState, p.luaState.Top())
+		nextVal, _ = p.luaState.ToNumber(p.luaState.Top())
+		// empty stack
+		p.luaState.Pop(p.luaState.Top())
+	} else {
+		nextVal = p.Initial + (p.timesAlready * p.Increment)
+	}
 	p.timesAlready++
 	return true, &nextVal, time.Now().UnixMilli()
 }
 
-func (p *Progression) Next() (bool, *float64) {
+func (p *Realtime) WithLuaState(state *lua.State) {
+	p.luaState = state
+}
+
+func (p *Progression) Next(luaState *lua.State) (bool, *float64) {
 	if p.timesAlready >= p.Times {
 		return false, nil
 	}
@@ -42,14 +66,27 @@ func (p *Progression) Next() (bool, *float64) {
 	var val float64
 	if p.NoData {
 		return true, nil
-	} else {
-		val = p.Initial + (float64(p.timesAlready) * p.Increment)
-		return true, &val
 	}
+
+	if p.Fn != "" && luaState != nil {
+		luaState.Global(p.Fn)
+		luaState.PushNumber(p.Initial)
+		luaState.PushNumber(p.timesAlready)
+		luaState.Call(2, 1)
+		lua.CheckNumber(luaState, luaState.Top())
+		val, _ = luaState.ToNumber(luaState.Top())
+		// empty stack
+		luaState.Pop(luaState.Top())
+	} else {
+		val = p.Initial + (p.timesAlready * p.Increment)
+	}
+
+	return true, &val
+
 }
 
 func (p *ProgressionList) Next() (bool, *float64, int64) {
-	valid, val := p.progressions[p.index].Next()
+	valid, val := p.progressions[p.index].Next(p.luaState)
 	if !valid {
 		if p.index >= len(p.progressions)-1 {
 			return false, nil, 0
@@ -68,4 +105,8 @@ func (p *ProgressionList) count() int64 {
 		sum += int64(progression.Times)
 	}
 	return sum
+}
+
+func (p *ProgressionList) WithLuaState(state *lua.State) {
+	p.luaState = state
 }

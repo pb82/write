@@ -88,15 +88,30 @@ func (p *ProgressionParser) progression() (*Progression, error) {
 		return nil, err
 	}
 
-	incrementValue, err := p.expect(TokenTypeValue)
+	iv, err := p.peek()
 	if err != nil {
 		return nil, err
 	}
 
-	if incrementType.StringVal == "+" {
-		progression.Increment = incrementValue.FloatVal
+	if iv.TokenType == TokenTypeValue {
+		incrementValue, err := p.expect(TokenTypeValue)
+		if err != nil {
+			return nil, err
+		}
+
+		if incrementType.StringVal == "+" {
+			progression.Increment = incrementValue.FloatVal
+		} else {
+			progression.Increment = -incrementValue.FloatVal
+		}
+	} else if iv.TokenType == TokenTypeFn {
+		functionValue, err := p.expect(TokenTypeFn)
+		if err != nil {
+			return nil, err
+		}
+		progression.Fn = functionValue.StringVal
 	} else {
-		progression.Increment = -incrementValue.FloatVal
+		return nil, errors.New("unexpected increment value type")
 	}
 
 	p.expect(TokenTypeX)
@@ -122,15 +137,30 @@ func (p *ProgressionParser) ParseRealtime() (ProgressionProvider, error) {
 		return nil, err
 	}
 
-	incrementValue, err := p.expect(TokenTypeValue)
+	iv, err := p.peek()
 	if err != nil {
 		return nil, err
 	}
 
-	if incrementType.StringVal == "+" {
-		rt.Increment = incrementValue.FloatVal
+	if iv.TokenType == TokenTypeValue {
+		incrementValue, err := p.expect(TokenTypeValue)
+		if err != nil {
+			return nil, err
+		}
+
+		if incrementType.StringVal == "+" {
+			rt.Increment = incrementValue.FloatVal
+		} else {
+			rt.Increment = -incrementValue.FloatVal
+		}
+	} else if iv.TokenType == TokenTypeFn {
+		functionValue, err := p.expect(TokenTypeFn)
+		if err != nil {
+			return nil, err
+		}
+		rt.Fn = functionValue.StringVal
 	} else {
-		rt.Increment = -incrementValue.FloatVal
+		return nil, errors.New("unexpected increment value type")
 	}
 
 	return &rt, nil

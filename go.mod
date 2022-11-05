@@ -3,6 +3,7 @@ module write
 go 1.19
 
 require (
+	github.com/Shopify/go-lua v0.0.0-20221004153744-91867de107cf
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/protobuf v1.5.0
 	github.com/golang/snappy v0.0.4

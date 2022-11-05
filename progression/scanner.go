@@ -1,6 +1,8 @@
 package progression
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
@@ -25,6 +27,7 @@ func (*Scanner) Scan(data string) (TokenList, error) {
 	}
 
 	currentNumber := strings.Builder{}
+	currentFunction := strings.Builder{}
 
 	consumeNumber := func() error {
 		if currentNumber.Len() == 0 {
@@ -82,6 +85,29 @@ func (*Scanner) Scan(data string) (TokenList, error) {
 				TokenType: TokenTypeUnderscore,
 				StringVal: string(r),
 			})
+		case '(':
+			err := consumeNumber()
+			if err != nil {
+				return nil, err
+			}
+			for {
+				if index >= len(runes) {
+					return nil, errors.New("unexpected end of input")
+				}
+				nextRune := next()
+				if nextRune == ')' {
+					tokens = append(tokens, Token{
+						TokenType: TokenTypeFn,
+						StringVal: currentFunction.String(),
+					})
+					currentFunction.Reset()
+					break
+				} else if unicode.IsLetter(nextRune) {
+					currentFunction.WriteRune(nextRune)
+				} else {
+					return nil, errors.New(fmt.Sprintf("invalid character in function name: %v", nextRune))
+				}
+			}
 		default:
 			currentNumber.WriteRune(r)
 			continue

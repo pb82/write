@@ -5,6 +5,7 @@ const (
 	TokenTypePlusMinus
 	TokenTypeX
 	TokenTypeUnderscore
+	TokenTypeFn
 )
 
 type TokenType int

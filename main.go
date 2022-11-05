@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/Shopify/go-lua"
 	"github.com/ghodss/yaml"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
@@ -83,11 +84,45 @@ func sendRequest(wr *prometheus.WriteRequest, url *url.URL) error {
 var (
 	prometheusUrl *string
 	configFile    *string
+	functionsFile *string
 )
 
 func init() {
 	prometheusUrl = flag.String("prometheus.url", "", "prometheus http url")
 	configFile = flag.String("config.file", DefaultConfigFile, "config file location")
+	functionsFile = flag.String("scripting.file", "", "location of functions for scripting")
+}
+
+func runWriter(wg *sync.WaitGroup, interval time.Duration, stop <-chan bool, parsedUrl *url.URL, rt RealtimeContext) {
+	go func() {
+		for {
+			select {
+			case _ = <-stop:
+				log.Println("stop signal received")
+				wg.Done()
+				return
+			case <-time.After(interval):
+				valid, value, timestamp := rt.rt.Next()
+				if valid && value != nil {
+					timeseries := prometheus.TimeSeries{}
+					timeseries.Labels = rt.ts.Labels
+					timeseries.Samples = append(timeseries.Samples, &prometheus.Sample{
+						Value:     *value,
+						Timestamp: timestamp,
+					})
+					wr := &prometheus.WriteRequest{}
+					wr.Timeseries = append(wr.Timeseries, &timeseries)
+					err := sendRequest(wr, parsedUrl)
+					if err != nil {
+						log.Fatalf("error writing series %v: %v", wr.String(), err)
+					} else {
+						log.Println(fmt.Sprintf("next value: %v", wr.String()))
+					}
+				}
+			}
+		}
+	}()
+
 }
 
 func main() {
@@ -119,6 +154,34 @@ func main() {
 		panic(err)
 	}
 
+	var luaState *lua.State = nil
+	if functionsFile != nil && *functionsFile != "" {
+		luaState = lua.NewState()
+		lua.OpenLibraries(luaState)
+		luaState.Register("unixtimemillis", func(state *lua.State) int {
+			state.PushNumber(float64(time.Now().UnixMilli()))
+			return 1
+		})
+		luaState.Register("dayinweek", func(state *lua.State) int {
+			state.PushNumber(float64(time.Now().Day()))
+			return 1
+		})
+		luaState.Register("hourinday", func(state *lua.State) int {
+			state.PushNumber(float64(time.Now().Hour()))
+			return 1
+		})
+		luaState.Register("minuteinhour", func(state *lua.State) int {
+			state.PushNumber(float64(time.Now().Minute()))
+			return 1
+		})
+		luaState.Register("secondinminute", func(state *lua.State) int {
+			state.PushNumber(float64(time.Now().Second()))
+			return 1
+		})
+		lua.DoFile(luaState, *functionsFile)
+		log.Println("lua scripting enabled")
+	}
+
 	scanner := ingest.NewTimeseriesScanner()
 	progScanner := progression.NewProgressionScanner()
 
@@ -145,6 +208,7 @@ func main() {
 				panic(err)
 			}
 
+			progressions.WithLuaState(luaState)
 			writeRequest := prometheus.WriteRequest{}
 			writeRequest.Timeseries = append(writeRequest.Timeseries, parsedTimeseries)
 			writeRequest.Metadata = append(writeRequest.Metadata, &prometheus.MetricMetadata{
@@ -174,7 +238,7 @@ func main() {
 			if err != nil {
 				panic(err)
 			}
-
+			rt.WithLuaState(luaState)
 			realtimeProgressions = append(realtimeProgressions, RealtimeContext{
 				rt: rt,
 				ts: parsedTimeseries,
@@ -194,7 +258,7 @@ func main() {
 
 	if len(realtimeProgressions) > 0 {
 		log.Println("entering realtime mode")
-		wg := sync.WaitGroup{}
+		wg := &sync.WaitGroup{}
 		stop := make(chan bool)
 		sigs := make(chan os.Signal)
 		signal.Notify(sigs, syscall.SIGTERM, syscall.SIGABRT, syscall.SIGINT)
@@ -202,40 +266,15 @@ func main() {
 			sig := <-sigs
 			switch sig {
 			case syscall.SIGTERM, syscall.SIGABRT, syscall.SIGINT:
-				stop <- true
+				close(stop)
 			}
 		}()
 
 		for _, rt := range realtimeProgressions {
 			wg.Add(1)
-			go func() {
-				for {
-					select {
-					case _ = <-stop:
-						log.Println("stop signal received")
-						wg.Done()
-						return
-					case <-time.After(interval):
-						valid, value, timestamp := rt.rt.Next()
-						if valid && value != nil {
-							timeseries := prometheus.TimeSeries{}
-							timeseries.Labels = rt.ts.Labels
-							timeseries.Samples = append(timeseries.Samples, &prometheus.Sample{
-								Value:     *value,
-								Timestamp: timestamp,
-							})
-							wr := &prometheus.WriteRequest{}
-							wr.Timeseries = append(wr.Timeseries, &timeseries)
-							err = sendRequest(wr, parsedUrl)
-							if err != nil {
-								log.Fatalf("error writing series %v: %v", wr.String(), err)
-							} else {
-								log.Println(fmt.Sprintf("next value: %v", wr.String()))
-							}
-						}
-					}
-				}
-			}()
+			rt := rt
+			log.Print("starting remote write goroutine")
+			runWriter(wg, interval, stop, parsedUrl, rt)
 		}
 
 		wg.Wait()
