@@ -44,20 +44,29 @@ You can have any number of time series.
 Precalculated series
 --------------------
 
-Progression: <Series>+
+Progression: <Series>+*
+
 Series: <Initial><Op><Increment>x<Times>
+
 Op: + | -
+
 Initial: Number
+
 Increment: Number
+
 Times: Number
 
 Realtime series
 ---------------
 
-Realtime: <Series>+
+Realtime: <Series>*
+
 Series: <Initial><Op><Increment>
+
 Op: + | -
+
 Initial: Number
+
 Increment: Number
 
 Scripting
