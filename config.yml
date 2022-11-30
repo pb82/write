@@ -2,4 +2,6 @@
 interval: 5s
 time_series:
   - series: kas_fleet_manager_kafka_requests_status_since_last_set{cluster_id="1jp6kdr7k0sjbe5adck2prjur8f39378",id="cdh36943c37idfspotqg",status="ready"}
-    progression: "0+(rnd)x50"
+    realtime: "1+0"
+  - series: kas_fleet_manager_kafka_requests_status_since_last_set{cluster_id="1jp6kdr7k0sjbe5adck2prjur8f39378",id="cdh36943c37idfspotqg",status="ready"}
+    realtime: "2+0"
